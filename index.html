@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Pages of Our Lives</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Cinzel:wght@400;700&family=Cormorant+Garamond:wght@300;400;500;700&family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, addDoc, onSnapshot, collection, query, orderBy, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Use the global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        setLogLevel('Debug');
+
+        let app, db, auth;
+
+        const music = {
+            songs: [
+                { title: "Roop Tera Mastana", artist: "Kishore Kumar", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+                { title: "Pal Bhar Ke Liye", artist: "Kishore Kumar", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+                { title: "O Mere Dil Ke Chain", artist: "Kishore Kumar", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+                { title: "Mere Sapno Ki Rani", artist: "Kishore Kumar", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+                { title: "Ek Ladki Bheegi Bhagi Si", artist: "Kishore Kumar", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" }
+            ],
+            currentSongIndex: 0,
+            audio: new Audio(),
+            isPlaying: false
+        };
+
+        // --- Firebase Initialization & Authentication ---
+        async function initializeFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase initialized and authenticated.");
+                } else {
+                    console.error("Firebase config is empty. Firestore will not be available.");
+                }
+            } catch (e) {
+                console.error("Error during Firebase initialization:", e);
+            }
+            setupEventListeners();
+        }
+
+        // --- Main Logic & Event Listeners ---
+        function setupEventListeners() {
+            const passwordInput = document.getElementById('passwordInput');
+            const enterBtn = document.getElementById('enterBtn');
+            const themeToggle = document.getElementById('themeToggle');
+            const photoInput = document.getElementById('photo-input');
+            const messageForm = document.getElementById('message-form');
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const prevBtn = document.getElementById('prev-btn');
+            const easterEggTrigger = document.getElementById('easter-egg-trigger');
+            const ghostWritingContainer = document.getElementById('ghost-writing-container');
+            const correctPassword = 'Shauryawedssaanvi';
+
+            if (enterBtn && passwordInput) {
+                enterBtn.addEventListener('click', () => checkPassword(correctPassword, passwordInput.value));
+                passwordInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        checkPassword(correctPassword, passwordInput.value);
+                    }
+                });
+            } else {
+                console.error("Password input or enter button not found.");
+            }
+
+            if (themeToggle) {
+                themeToggle.addEventListener('change', (e) => {
+                    document.body.classList.toggle('dark-mode', e.target.checked);
+                });
+            }
+
+            if (photoInput && db) {
+                photoInput.addEventListener('change', handleImageUpload);
+                setupPhotoGalleryListener();
+            }
+
+            // Music player logic
+            if (playPauseBtn && nextBtn && prevBtn) {
+                const songTitleElement = document.getElementById('current-song-title');
+                music.audio.addEventListener('ended', () => {
+                    music.currentSongIndex = (music.currentSongIndex + 1) % music.songs.length;
+                    playSong();
+                });
+                
+                playPauseBtn.addEventListener('click', () => {
+                    if (music.isPlaying) {
+                        music.audio.pause();
+                        playPauseBtn.innerHTML = '&#9658;'; // Play symbol
+                    } else {
+                        playSong();
+                        playPauseBtn.innerHTML = '&#10074;&#10074;'; // Pause symbol
+                    }
+                    music.isPlaying = !music.isPlaying;
+                });
+
+                nextBtn.addEventListener('click', () => {
+                    music.currentSongIndex = (music.currentSongIndex + 1) % music.songs.length;
+                    playSong();
+                });
+
+                prevBtn.addEventListener('click', () => {
+                    music.currentSongIndex = (music.currentSongIndex - 1 + music.songs.length) % music.songs.length;
+                    playSong();
+                });
+
+                function playSong() {
+                    const currentSong = music.songs[music.currentSongIndex];
+                    music.audio.src = currentSong.src;
+                    songTitleElement.textContent = `${currentSong.title} - ${currentSong.artist}`;
+                    music.audio.loop = true; // Loop the music
+                    music.audio.play().catch(e => {
+                         console.error("Autoplay was prevented:", e);
+                         songTitleElement.textContent = `Click play to hear: ${currentSong.title}`;
+                     });
+                    music.isPlaying = true;
+                    playPauseBtn.innerHTML = '&#10074;&#10074;';
+                }
+            }
+
+
+            // Message submission logic
+            if (messageForm && db && auth) {
+                messageForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const messageText = document.getElementById('message-input').value;
+                    const userName = document.getElementById('user-name').value || 'Anonymous';
+
+                    if (messageText.trim() === '') return;
+
+                    try {
+                        const userId = auth.currentUser?.uid || crypto.randomUUID();
+                        const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/loveLetters`);
+                        await addDoc(messagesCollectionRef, {
+                            text: messageText,
+                            userId: userId,
+                            userName: userName,
+                            timestamp: Date.now()
+                        });
+                        document.getElementById('message-input').value = '';
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                    }
+                });
+                
+                // Real-time message listener for the floating messages
+                const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/loveLetters`);
+                onSnapshot(query(messagesCollectionRef), (snapshot) => {
+                    const messagesContainer = document.getElementById('real-time-messages');
+                    snapshot.docs.sort((a,b) => b.data().timestamp - a.data().timestamp).forEach(doc => {
+                        const msgData = doc.data();
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'floating-message';
+                        messageDiv.textContent = `"${msgData.text}" - ${msgData.userName}`;
+                        messagesContainer.appendChild(messageDiv);
+
+                        setTimeout(() => {
+                            messagesContainer.removeChild(messageDiv);
+                        }, 5000);
+                    });
+                });
+
+                // Love letter archive listener
+                const archiveContainer = document.getElementById('love-letter-archive');
+                onSnapshot(query(messagesCollectionRef, orderBy("timestamp", "desc")), (snapshot) => {
+                    archiveContainer.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const msgData = doc.data();
+                        const letterDiv = document.createElement('div');
+                        letterDiv.className = 'love-letter-card';
+                        letterDiv.innerHTML = `
+                            <p class="letter-text">${msgData.text}</p>
+                            <p class="letter-signature">- ${msgData.userName}</p>
+                        `;
+                        archiveContainer.appendChild(letterDiv);
+                    });
+                });
+            } else if (messageForm) {
+                console.error("Firestore not available. Message functionality is disabled.");
+                messageForm.innerHTML = '<p class="error-message">Message functionality is currently unavailable.</p>';
+            }
+            
+            // Memory Table submission logic
+            const memoryForm = document.getElementById('memory-form');
+            if (memoryForm && db && auth) {
+                 memoryForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const date = document.getElementById('memory-date').value;
+                    const event = document.getElementById('memory-event').value;
+                    const description = document.getElementById('memory-description').value;
+                    
+                    if (date.trim() === '' || event.trim() === '' || description.trim() === '') {
+                        return;
+                    }
+
+                    try {
+                        const userId = auth.currentUser?.uid || crypto.randomUUID();
+                        const memoriesCollectionRef = collection(db, `artifacts/${appId}/public/data/memoryTable`);
+                        await addDoc(memoriesCollectionRef, {
+                            date: date,
+                            event: event,
+                            description: description,
+                            userId: userId,
+                            timestamp: Date.now()
+                        });
+                        memoryForm.reset();
+                    } catch (error) {
+                        console.error("Error adding memory:", error);
+                    }
+                });
+
+                // Memory Table real-time listener
+                const memoryTableBody = document.getElementById('memory-table-body');
+                const memoriesCollectionRef = collection(db, `artifacts/${appId}/public/data/memoryTable`);
+                onSnapshot(query(memoriesCollectionRef, orderBy("timestamp", "desc")), (snapshot) => {
+                    memoryTableBody.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${data.date}</td>
+                            <td>${data.event}</td>
+                            <td>${data.description}</td>
+                        `;
+                        memoryTableBody.appendChild(row);
+                    });
+                });
+            }
+
+            // Easter Egg Logic
+            let clickCount = 0;
+            const poemText = "In fields of gold, where sunbeams waltz, our love story, a whispered song. A timeless tale, where our hearts belong.";
+            
+            if (easterEggTrigger) {
+                easterEggTrigger.addEventListener('click', () => {
+                    clickCount++;
+                    if (clickCount >= 3) {
+                        typePoem(ghostWritingContainer, poemText);
+                    }
+                });
+            }
+
+            function typePoem(element, text) {
+                if (element.textContent.length > 0) return;
+                let i = 0;
+                element.classList.add('typing-effect');
+                element.classList.add('typing-cursor');
+
+                const typingInterval = setInterval(() => {
+                    if (i < text.length) {
+                        element.textContent += text.charAt(i);
+                        i++;
+                    } else {
+                        clearInterval(typingInterval);
+                        element.classList.remove('typing-cursor');
+                    }
+                }, 75);
+            }
+            
+            // Page Navigation Logic
+            document.getElementById('to-prem-patra-btn').addEventListener('click', () => {
+                showPage('prem-patra');
+            });
+            document.getElementById('back-to-home-btn').addEventListener('click', () => {
+                showPage('websiteContent');
+            });
+            document.getElementById('to-memories-btn').addEventListener('click', () => {
+                showPage('memories-page');
+            });
+             document.getElementById('back-to-home-from-memories').addEventListener('click', () => {
+                showPage('websiteContent');
+            });
+        }
+        
+        // --- Photo Gallery Logic with Firestore ---
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                if (file.size > 1000000) { // Check file size before processing (approx 1MB limit for document)
+                    showMessage('The photo is too large! Please choose a smaller one.');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const base64Data = e.target.result;
+                    const userId = auth.currentUser?.uid || 'anonymous';
+                    
+                    try {
+                        const memoriesCollectionRef = collection(db, `artifacts/${appId}/public/data/memories`);
+                        await addDoc(memoriesCollectionRef, {
+                            imageData: base64Data,
+                            userId: userId,
+                            timestamp: Date.now()
+                        });
+                        showMessage('Photo uploaded successfully!', 'success');
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                        showMessage('Failed to upload photo. Please try again.', 'error');
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function setupPhotoGalleryListener() {
+            const gallery = document.getElementById('gallery');
+            if (db) {
+                const memoriesCollectionRef = collection(db, `artifacts/${appId}/public/data/memories`);
+                const q = query(memoriesCollectionRef, orderBy("timestamp", "desc"));
+                onSnapshot(q, (snapshot) => {
+                    gallery.innerHTML = '';
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const newPhoto = document.createElement('div');
+                        newPhoto.className = 'image-frame';
+                        newPhoto.innerHTML = `<img src="${data.imageData}" alt="Shared memory" onerror="this.src='https://placehold.co/400x300/e1d3b1/3f3227?text=Failed+to+load+image';">`;
+                        gallery.appendChild(newPhoto);
+                    });
+                });
+            } else {
+                gallery.innerHTML = '<p class="text-center text-red-500">Photo gallery is currently unavailable due to database issues.</p>';
+            }
+        }
+        
+        function showMessage(text, type = 'info') {
+            const messagesContainer = document.getElementById('real-time-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `floating-message ${type}`;
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+            messageDiv.style.opacity = '1';
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                setTimeout(() => messagesContainer.removeChild(messageDiv), 500);
+            }, 5000);
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page-container').forEach(page => {
+                page.style.animation = '';
+                page.classList.remove('visible-page');
+                page.classList.add('hidden-page');
+            });
+            const currentPage = document.getElementById(pageId);
+            currentPage.classList.remove('hidden-page');
+            currentPage.classList.add('visible-page');
+            currentPage.style.animation = 'pageSlideIn 1s forwards';
+            window.scrollTo(0, 0); // Scroll to top of the new page
+        }
+
+        function checkPassword(correctPassword, passwordAttempt) {
+            const passwordScreen = document.getElementById('passwordScreen');
+            const welcomeMessage = document.getElementById('welcomeMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const songTitleElement = document.getElementById('current-song-title');
+            
+            if (passwordAttempt === correctPassword) {
+                passwordScreen.style.animation = 'pageTurn 2s forwards';
+                welcomeMessage.textContent = 'Welcome, My Love.';
+                welcomeMessage.style.opacity = '1';
+                
+                setTimeout(() => {
+                    showPage('websiteContent');
+                    setupSectionAnimations();
+                    playSong();
+                }, 2000);
+            } else {
+                errorMessage.textContent = 'Incorrect password. Please try again.';
+                errorMessage.style.opacity = '1';
+                setTimeout(() => {
+                    errorMessage.style.opacity = '0';
+                }, 3000);
+            }
+        }
+        
+        function setupSectionAnimations() {
+            const sections = document.querySelectorAll('section');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('in-view');
+                    }
+                });
+            }, {
+                threshold: 0.2
+            });
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+        }
+        
+        function playSong() {
+            const currentSong = music.songs[music.currentSongIndex];
+            music.audio.src = currentSong.src;
+            document.getElementById('current-song-title').textContent = `${currentSong.title} - ${currentSong.artist}`;
+            music.audio.loop = true;
+            music.audio.play().catch(e => {
+                console.error("Autoplay was prevented:", e);
+                const playPauseBtn = document.getElementById('play-pause-btn');
+                playPauseBtn.innerHTML = '&#9658;';
+                document.getElementById('current-song-title').textContent = `Please click play to start the music.`;
+            });
+            music.isPlaying = true;
+            document.getElementById('play-pause-btn').innerHTML = '&#10074;&#10074;';
+        }
+
+        // Wait for the DOM to be fully loaded before running the script
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase();
+            const passwordInput = document.getElementById('passwordInput');
+            if (passwordInput) {
+                passwordInput.focus();
+            }
+        });
+    </script>
+    <style>
+        /* ======================================================================== */
+        /* SUPER VINTAGE MASTER AESTHETIC SYSTEM                                    */
+        /* ======================================================================== */
+        :root {
+            --color-paper-light: #FBF6E8;
+            --color-sepia-dark: #3F3227;
+            --color-sepia-medium: #8D5431;
+            --color-gold-dust: #C8A979;
+            --color-faded-rose: #C69584;
+            --color-brown-shadow: #8B4513;
+
+            --color-bg: var(--color-paper-light);
+            --color-text: var(--color-sepia-dark);
+            --color-accent: var(--color-gold-dust);
+            --color-card-bg: rgba(255, 255, 255, 0.5);
+            --color-control-bg: #E1D3B1;
+
+            --font-fancy: 'Playfair Display', serif;
+            --font-elegant: 'Cormorant Garamond', serif;
+            --font-script: 'Dancing Script', cursive;
+            --vintage-shadow: 10px 10px 20px rgba(0,0,0,0.1), inset 0 0 10px rgba(0,0,0,0.05);
+        }
+        
+        body.dark-mode {
+            --color-bg: #2B2117;
+            --color-text: #FBF6E8;
+            --color-accent: #A57C40;
+            --color-card-bg: rgba(0, 0, 0, 0.4);
+            --color-control-bg: #4A3A2F;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: var(--font-elegant);
+            color: var(--color-text);
+            background-color: var(--color-bg);
+            scroll-behavior: smooth;
+            overflow-x: hidden;
+            position: relative;
+            filter: sepia(0.3) contrast(1.1);
+            transition: background-color 1.5s ease, color 1.5s ease;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23f)' opacity='0.5'/%3E%3C/svg%3E");
+            opacity: 0.5;
+            z-index: 10;
+        }
+        
+        h1, h2, h3 { font-family: var(--font-fancy); text-align: center; line-height: 1.2; }
+        h1 { font-size: 5rem; color: var(--color-sepia-medium); text-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
+        body.dark-mode h1 { color: var(--color-gold-dust); }
+
+        h2 { font-size: 3.5rem; color: var(--color-text); margin-bottom: 2rem; }
+        h3 { font-size: 2.5rem; color: var(--color-accent); }
+        p { max-width: 700px; margin: 0 auto; text-align: center; line-height: 1.6; }
+        .romantic-quote { font-family: var(--font-script); font-size: 2.5rem; color: var(--color-faded-rose); margin-top: 1rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 1rem; }
+        
+        /* Navigation */
+        .nav-bar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 1rem;
+            background-color: var(--color-card-bg);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            box-shadow: var(--vintage-shadow);
+        }
+        .nav-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: var(--font-elegant);
+            font-size: 1.2rem;
+            color: var(--color-sepia-dark);
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+            border-radius: 20px;
+        }
+        .nav-button:hover {
+            background-color: var(--color-gold-dust);
+            color: var(--color-paper-light);
+        }
+        body.dark-mode .nav-button {
+            color: var(--color-text);
+        }
+
+        /* Message Banner */
+        #real-time-messages {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 50;
+        }
+
+        .floating-message {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            padding: 1rem 2rem;
+            margin-top: 1rem;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: var(--font-script);
+            font-size: 1.5rem;
+            color: var(--color-sepia-dark);
+            animation: slideInFromTop 1s ease-out forwards;
+            max-width: 80%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        
+        .floating-message.visible {
+            opacity: 1;
+        }
+
+        body.dark-mode .floating-message {
+            background: rgba(0, 0, 0, 0.6);
+            color: var(--color-paper-light);
+        }
+
+        /* Toggle Switch */
+        .toggle-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .toggle-label span {
+            font-family: var(--font-elegant);
+            margin: 0 10px;
+            color: var(--color-text);
+            transition: color 1.5s ease;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .toggle-switch input { display: none; }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--color-sepia-medium);
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: var(--color-paper-light);
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider { background-color: var(--color-gold-dust); }
+        input:checked + .toggle-slider:before { transform: translateX(26px); }
+
+        /* General Sections & Cards */
+        section {
+            padding: 8rem 2rem;
+            position: relative;
+            z-index: 20;
+            opacity: 0;
+            transform: translateY(50px);
+            transition: opacity 1s ease-out, transform 1s ease-out;
+        }
+        section.in-view {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .card {
+            background-color: var(--color-card-bg);
+            padding: 2rem;
+            border: 2px solid var(--color-accent);
+            box-shadow: var(--vintage-shadow);
+            transition: all 0.5s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 15px 15px 30px rgba(0,0,0,0.2);
+        }
+        .form-group { margin-bottom: 1.5rem; }
+        input, textarea, select {
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--color-paper-light);
+            border: 1px solid var(--color-sepia-medium);
+            color: var(--color-sepia-dark);
+            font-family: var(--font-elegant);
+        }
+        body.dark-mode input, body.dark-mode textarea, body.dark-mode select {
+            background-color: rgba(0, 0, 0, 0.2);
+            color: var(--color-paper-light);
+            border-color: var(--color-accent);
+        }
+        button {
+            background-color: var(--color-sepia-medium);
+            color: var(--color-paper-light);
+            padding: 1rem 2rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: var(--font-elegant);
+        }
+        button:hover {
+            background-color: var(--color-accent);
+            color: var(--color-sepia-dark);
+        }
+        .photo-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .image-frame {
+            border: 5px solid var(--color-sepia-medium);
+            box-shadow: var(--vintage-shadow);
+            padding: 5px;
+            transform: rotate(-2deg);
+            transition: transform 0.3s ease;
+            width: 300px;
+            height: 250px;
+            object-fit: cover;
+        }
+        .image-frame:hover {
+            transform: rotate(0deg) scale(1.05);
+        }
+        .image-frame img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            filter: sepia(0.8) hue-rotate(-20deg) contrast(1.1) brightness(0.9);
+            transition: filter 0.5s ease-in-out;
+        }
+        .image-frame:hover img {
+            filter: none;
+        }
+
+        /* Easter Egg */
+        .easter-egg-trigger {
+            cursor: pointer;
+            color: var(--color-gold-dust);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            transition: all 0.5s ease;
+            text-decoration: underline;
+        }
+        .easter-egg-trigger:hover {
+            color: var(--color-faded-rose);
+            text-shadow: none;
+        }
+        
+        .ghost-writing-container {
+            margin-top: 1rem;
+            font-family: 'Cormorant Garamond', serif; /* Use an elegant font */
+            font-size: 2rem;
+            color: var(--color-gold-dust);
+            text-align: center;
+            margin-left: auto;
+            margin-right: auto;
+            white-space: pre-wrap;
+            overflow: hidden;
+            border-right: 3px solid transparent;
+            text-shadow: 0 0 5px var(--color-gold-dust), 0 0 10px var(--color-gold-dust);
+        }
+
+        .typing-cursor {
+            border-color: var(--color-gold-dust);
+            animation: blink 0.7s infinite step-end;
+        }
+
+        @keyframes blink {
+            from, to { border-color: transparent; }
+            50% { border-color: var(--color-gold-dust); }
+        }
+        
+        /* Music Player */
+        .music-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--color-control-bg);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: var(--vintage-shadow);
+            margin: 2rem auto;
+            max-width: 400px;
+        }
+        .music-title {
+            font-family: var(--font-elegant);
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .music-controls {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .music-btn {
+            background-color: var(--color-sepia-medium);
+            color: var(--color-paper-light);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+        }
+        .music-btn:hover {
+            background-color: var(--color-gold-dust);
+            color: var(--color-sepia-dark);
+            transform: scale(1.1);
+        }
+
+        /* Prem Patra Page-Specific Styles */
+        #prem-patra {
+            background-color: var(--color-bg);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23FBF6E8'/%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .love-letter-archive {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .love-letter-card {
+            background-color: rgba(255, 255, 255, 0.7);
+            border: 1px solid var(--color-accent);
+            padding: 2rem;
+            box-shadow: var(--vintage-shadow);
+            transform: rotate(-1deg);
+            transition: transform 0.3s ease;
+        }
+        .love-letter-card:nth-child(even) { transform: rotate(1deg); }
+        .love-letter-card:hover { transform: scale(1.05) rotate(0deg); }
+        .letter-text {
+            font-family: var(--font-elegant);
+            font-style: italic;
+            font-size: 1.2rem;
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            text-align: left;
+        }
+        .letter-signature {
+            font-family: var(--font-script);
+            text-align: right;
+            font-size: 1.5rem;
+        }
+        
+        /* Memory Table Styles */
+        #memories-page {
+            background-color: var(--color-bg);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .memory-table-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            border: 2px solid var(--color-sepia-medium);
+            box-shadow: var(--vintage-shadow);
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.6);
+        }
+        .memory-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-elegant);
+        }
+        .memory-table th, .memory-table td {
+            padding: 0.75rem;
+            border: 1px solid var(--color-sepia-medium);
+        }
+        .memory-table thead {
+            background-color: var(--color-control-bg);
+            font-weight: bold;
+        }
+        .memory-table tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        .memory-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Timeline table styling */
+        .timeline-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+            background-color: var(--color-card-bg);
+            box-shadow: var(--vintage-shadow);
+        }
+        .timeline-table th, .timeline-table td {
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid var(--color-sepia-medium);
+            font-family: var(--font-elegant);
+        }
+        .timeline-table th {
+            background-color: var(--color-control-bg);
+            color: var(--color-sepia-dark);
+            font-weight: bold;
+            font-family: var(--font-fancy);
+        }
+        .timeline-table tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        .timeline-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        .highlight-event {
+            font-weight: bold;
+            color: var(--color-faded-rose);
+        }
+
+        /* Animations */
+        @keyframes pageTurn { 0% { transform: rotateY(0deg); } 50% { transform: rotateY(90deg); } 100% { transform: rotateY(180deg); } }
+        @keyframes slideInFromTop { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pageSlideIn {
+            from { opacity: 0; transform: translateY(50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Page Navigation Classes */
+        .page-container {
+            transition: opacity 1s ease;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-height: 100vh;
+        }
+        .hidden-page {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .visible-page {
+            display: block;
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Theme Toggle (moved to be visible before password gate) -->
+    <div class="toggle-container">
+        <label class="toggle-label" for="themeToggle">
+            <span>Light</span>
+            <div class="toggle-switch">
+                <input type="checkbox" id="themeToggle">
+                <span class="toggle-slider"></span>
+            </div>
+            <span>Dark</span>
+        </label>
+    </div>
+
+    <!-- Password Gateway -->
+    <div class="page-container password-screen" id="passwordScreen">
+        <div class="card password-box">
+            <h2> Two Souls, One Locked Story ...</h2>
+            <p style="color: var(--color-sepia-dark);">Whisper the secret key, and let the universe of hidden memories bloom before your eyes.....</p>
+            <input type="password" id="passwordInput" placeholder="??">
+            <button id="enterBtn">Unlock</button>
+            <p id="errorMessage" class="error-message"></p>
+        </div>
+    </div>
+    
+    <!-- Welcome Message Overlay -->
+    <div id="welcomeMessage" class="welcome-message"></div>
+    <div id="real-time-messages"></div>
+
+    <!-- Main Website Content -->
+    <div class="page-container website-content hidden-page" id="websiteContent">
+        <!-- Navigation Bar -->
+        <nav class="nav-bar">
+            <button id="to-prem-patra-btn" class="nav-button">Prem Patra</button>
+            <button id="to-memories-btn" class="nav-button">Our Memories</button>
+        </nav>
+
+        <!-- Section 1: Hero Landing -->
+        <section id="hero">
+            <h1 class="hero-names">Shaurya & Saanvi</h1>
+            <p class="romantic-quote">A love, so timeless, it echoes from the golden past.</p>
+        </section>
+
+        <!-- Section 2: Character Profiles -->
+        <section id="profiles" class="card">
+            <h2 class="section-title"> Our Lifeline: Two Souls, One Story ...Forever Written, Never Replaced </h2>
+            <div class="container" style="display: flex; justify-content: center; flex-direction: column; align-items: center;">
+                <p>A look at the beautiful journey that has led us here. Our lives, intertwined like threads of fate.</p>
+                <p style="font-size: 1.2rem;">Saanvi Age: 16 | Shaurya Age: 14</p>
+                <p class="highlight-event">Current Year: 2025</p>
+            </div>
+            <div class="table-container">
+                <table class="timeline-table">
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Saanvi Age</th>
+                            <th>Saanvi Status</th>
+                            <th>Shaurya Age</th>
+                            <th>Shaurya Status</th>
+                            <th>Life Event</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>2009</td><td>0</td><td>Born (27 Nov 2009)</td><td>–</td><td>Not Born</td><td></td></tr>
+                        <tr><td>2010</td><td>1</td><td>Infant</td><td>–</td><td>Not Born</td><td></td></tr>
+                        <tr><td>2011</td><td>2</td><td>Toddler</td><td>0</td><td>Born (15 Jan 2011)</td><td></td></tr>
+                        <tr><td>2012</td><td>3</td><td>Preschool</td><td>1</td><td>Infant</td><td></td></tr>
+                        <tr><td>2013</td><td>4</td><td>Primary School</td><td>2</td><td>Toddler</td><td></td></tr>
+                        <tr><td>2014</td><td>5</td><td>Primary School</td><td>3</td><td>Primary School</td><td></td></tr>
+                        <tr><td>2015</td><td>6</td><td>Primary School</td><td>4</td><td>Primary School</td><td></td></tr>
+                        <tr><td>2016</td><td>7</td><td>Schooling</td><td>5</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2017</td><td>8</td><td>Schooling</td><td>6</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2018</td><td>9</td><td>Schooling</td><td>7</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2019</td><td>10</td><td>Schooling</td><td>8</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2020</td><td>11</td><td>Schooling</td><td>9</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2021</td><td>12</td><td>Schooling</td><td>10</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2022</td><td>13</td><td>Schooling</td><td>11</td><td>Schooling</td><td></td></tr>
+                        <tr><td>2023</td><td>14</td><td>Class 9</td><td>12</td><td>Class 7</td><td></td></tr>
+                        <tr><td>2024</td><td>15</td><td>Class 10</td><td>13</td><td>Class 8</td><td></td></tr>
+                        <tr><td>2025</td><td>16</td><td>Class 11</td><td>14</td><td>Class 9</td><td><span class="highlight-event">Current Year</span></td></tr>
+                        <tr><td>2026</td><td>17</td><td>Class 12 Completed  NEET</td><td>15</td><td>Class 10</td><td></td></tr>
+                        <tr><td>2027</td><td>18</td><td>MBBS Year 1</td><td>16</td><td>Class 11</td><td></td></tr>
+                        <tr><td>2028</td><td>19</td><td>MBBS Year 2</td><td>17</td><td>Class 12 Completed  NEET</td><td></td></tr>
+                        <tr><td>2029</td><td>20</td><td>MBBS Year 3</td><td>18</td><td>MBBS Year 1</td><td></td></tr>
+                        <tr><td>2030</td><td>21</td><td>MBBS Year 4</td><td>19</td><td>MBBS Year 2</td><td></td></tr>
+                        <tr><td>2031</td><td>22</td><td>MBBS Internship ? MBBS Completed</td><td>20</td><td>MBBS Year 3</td><td></td></tr>
+                        <tr><td>2032</td><td>23</td><td>MS (Year 1)</td><td>21</td><td>MBBS Year 4</td><td></td></tr>
+                        <tr><td>2033</td><td>24</td><td>MS (Year 2)</td><td>22</td><td>MBBS Internship  MBBS Completed</td><td></td></tr>
+                        <tr><td>2034</td><td>25</td><td>MS (Year 3) ? MS Completed</td><td>23</td><td>MS (Year 1)</td><td class="highlight-event">Marriage Year ??</td></tr>
+                        <tr><td>2035</td><td>26</td><td>Fellowship 1</td><td>24</td><td>MS (Year 2)</td><td></td></tr>
+                        <tr><td>2036</td><td>27</td><td>Fellowship 2</td><td>25</td><td>MS (Year 3)  MS Completed</td><td></td></tr>
+                        <tr><td>2037</td><td>28</td><td>Practicing Specialist Doctor</td><td>26</td><td>Fellowship 1</td><td class="highlight-event">First Baby Born ??</td></tr>
+                        <tr><td>2038</td><td>29</td><td>Practicing Specialist Doctor</td><td>27</td><td>Fellowship 2</td><td></td></tr>
+                        <tr><td>2039</td><td>30</td><td>Established Doctor (Super Specialist)</td><td>28</td><td>Practicing Specialist Doctor</td><td></td></tr>
+                        <tr><td>2040</td><td>31</td><td>Senior Doctor</td><td>29</td><td>Practicing Specialist Doctor</td><td></td></tr>
+                        <tr><td>2041</td><td>32</td><td>Senior Doctor / Consultant</td><td>30+</td><td>Senior Doctor / Consultant</td><td></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- Section 3: Music Player -->
+        <section id="music-section" class="card">
+            <h2>Our Timeless Melodies</h2>
+            <div class="music-player">
+                <p id="current-song-title" class="music-title">Awaiting Your Play...</p>
+                <div class="music-controls">
+                    <button id="prev-btn" class="music-btn">&#9664;</button>
+                    <button id="play-pause-btn" class="music-btn">&#9658;</button>
+                    <button id="next-btn" class="music-btn">&#9654;</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Photo Gallery -->
+        <section id="photo-gallery" class="card">
+            <h2>Our Shared Memories</h2>
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <input type="file" id="photo-input" accept="image/*" style="display: none;">
+                <button onclick="document.getElementById('photo-input').click()">Add a Photo</button>
+                <p style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--color-sepia-dark);">Note: Videos are not supported. Images will be saved permanently.</p>
+            </div>
+            <div class="photo-gallery" id="gallery">
+                <!-- Gallery images will be added here -->
+            </div>
+        </section>
+        
+        <!-- Section 5: The Final Message & Easter Egg -->
+        <section id="final-message">
+            <h2>A Message to Our Future</h2>?? My Eternal Pain, My Eternal Love, My Eternal Everything ??  
+
+            Sometimes I ask myself: *Why do I love her this much?* Why do I destroy myself every single day just for a single glimpse of her? And the answer is always the same — because she is not just a girl to me. She is not just someone I saw in the library one random day in 2024. She is the **definition of my existence**, the only reason my heart still beats, the only light in the endless dark I live in.  
+
+            when I first saw Saanvi in that library, I wasn’t just a boy in Class 8 looking at a senior in Class 11 PCB. No. That day, the entire universe rewrote itself. That day, destiny carved her name into the walls of my soul. Since that moment, every day of my life has been painted with her shadow. She became my dream, my prayer, my obsession, my madness, my everything.  
+
+            And still… she doesn’t love me.  
+            
+            Do you know what that feels like? To **give everything** — and I mean everything — yet to receive nothing? To turn your entire life into a sacrifice for someone, and still remain invisible in their eyes? I learned basketball, not because I loved the sport, but because she was there, because her hands touched the ball, because her footsteps owned the court. I played, I stumbled, I fell — but every bruise felt like devotion, every drop of sweat felt like worship, because I was doing it all for her.  
+
+            I wrote letters — hundreds of them. I made flipbooks filled with my heart, my sketches, my unspeakable feelings. I wrote as if the pages were the only place brave enough to hold my love. I messaged her on Instagram night after night, not caring if she ignored me, not caring if the world mocked me. And then, that one day, when she finally gave me her **private number**, my world shattered into colors I never imagined. That number wasn’t just digits. It was my lifeline. It was proof that maybe, just maybe, my existence had reached her.  
+
+            We started talking. And with every call, my addiction deepened. I couldn’t survive without her voice. Even one minute of silence, one minute of not hearing her — and I would break down, tears falling like a child who lost his entire world. Because that’s what she is — my entire world.  
+
+            But still, she doesn’t love me.  
+
+            Every morning in school, while others rushed to their classes, I rushed upstairs — just to see her. To find her. To steal one glance that could carry me through the day. I bunked periods. I risked my record, my future. I got warning letters from the principal. Teachers shouted, students laughed, everyone noticed — but I didn’t care. Because my only mission, my only religion, was Saanvi. I even stayed in the toilet for hours just because it was near her class. Just because maybe, in the middle of all that waiting, I would see her pass by. People will never understand how far a boy can go when his love is real.  
+
+            And because she studied Class 11 PCB, I studied too. I made her notes — neat, perfect, filled with effort, filled with my care. I wanted her to succeed, to rise, to shine — because if she was happy, I was alive. I even went beyond, studied Class 12 PCB, not for my future, not for exams, but only for her. Every formula, every diagram, every chemical reaction — all memorized in the name of Saanvi.  
+
+           But still… she doesn’t love me.  
+
+           And that’s the tragedy of my life. The pain I cannot escape. I gave her my heart, my time, my everything, and yet, her heart never belonged to me. She smiles, but not for me. She laughs, but not because of me. She shines, but I remain in her shadow. I’m the boy who destroys himself for her, yet remains invisible.  
+
+           It hurts — God, it hurts so much. Some nights, I lie awake, staring at the ceiling, whispering her name again and again, like a prayer the universe keeps ignoring. I imagine her hand in mine, her eyes looking into mine, her voice saying my name with love. But then reality hits, and the silence becomes unbearable.  
+
+           And yet… I cannot stop.  
+
+           Because love is not a switch you can turn off. Love is not a deal where you only give if you receive. Real love is burning, endlessly, even when no one sees your fire. Real love is giving, even when you are empty. Real love is hurting, even when it kills you. And I — I love Saanvi with that kind of madness.  
+
+           So yes, I suffer. Yes, I cry. Yes, I walk the halls like a ghost, hungry for her presence. Yes, I ruin myself every day. But if you ask me, *“Would you stop loving her if she never loves you back?”* The answer will always be **no**.  
+
+           Because Saanvi is not just someone I love. She is my everything. My universe. My eternal. My pain and my healing. My curse and my blessing. My reason to smile and my reason to break. She is my forever.  
+
+           And maybe she will never know how deep my love runs. Maybe she will never feel even a fraction of what I feel. Maybe she will walk away, live her life, forget me like I was nothing. But me I will never forget. I will never stop. Even if she doesn’t love me, I will love her until my last breath — and beyond.  
+
+           Because this love… this madness… this endless ache in my heart…  
+          is not just love. It is **Saanvi.**  
+     
+           And that is my truth.  
+
+            <p style="font-size: 1.2rem;">ture is brighter than the stars.....In shadows of storms, where dreams still rise, my soul carves light across endless skies. A journey of scars, yet hope’s embrace, in fate’s cruel mirror, I find my place.</p>
+            <p style="font-size: 1rem; color: var(--color-faded-rose); margin-top: 1rem;">Click a few times on <span id="easter-egg-trigger" style="font-family: 'Marcellus', serif; text-decoration: underline; cursor: pointer;">the magic word</span> to reveal a secret poem.</p>
+            
+            <!-- Ghost writing container -->
+            <div id="ghost-writing-container" class="ghost-writing-container"></div>
+        </section>
+    </div>
+    <!-- The New Prem Patra Page -->
+    <div class="page-container hidden-page" id="prem-patra">
+        <nav class="nav-bar">
+            <button id="back-to-home-btn" class="nav-button">Home</button>
+        </nav>
+        <section style="padding-top: 5rem;">
+            <h2>The Love Letters of Our Lives</h2>
+            <p style="font-size: 1.1rem; color: var(--color-sepia-dark); text-align: center;">Write your message below to add it to our timeless archive.</p>
+            <form id="message-form" style="max-width: 600px; margin: 2rem auto;">
+                <div class="form-group">
+                    <label for="user-name" style="font-weight: bold;">Your Name:</label>
+                    <input type="text" id="user-name" placeholder="Your Name">
+                </div>
+                <div class="form-group">
+                    <label for="message-input" style="font-weight: bold;">Write your letter:</label>
+                    <textarea id="message-input" rows="5" placeholder="Your message here..."></textarea>
+                </div>
+                <button type="submit" style="width: 100%;">Send Your Love</button>
+            </form>
+            <hr style="margin: 4rem 0; border: 1px dashed var(--color-accent);">
+            <h3>The Archives</h3>
+            <div id="love-letter-archive" class="love-letter-archive">
+                <!-- Love letters will be loaded here from Firestore -->
+            </div>
+        </section>
+    </div>
+
+    <!-- New Page for Shared Memories -->
+    <div class="page-container hidden-page" id="memories-page">
+        <nav class="nav-bar">
+            <button id="back-to-home-from-memories" class="nav-button">Home</button>
+        </nav>
+        <section style="padding-top: 5rem;">
+            <h2>Our Shared Memories Table</h2>
+            <p style="text-align: center;">Let's document our most cherished moments together. Add a memory, and it will appear in our shared timeline.</p>
+            <div class="memory-table-container">
+                <form id="memory-form" style="padding: 1rem;">
+                    <h3 style="text-align: left;">Add a New Memory</h3>
+                    <div class="form-group">
+                        <label for="memory-date">Date:</label>
+                        <input type="date" id="memory-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="memory-event">Event Title:</label>
+                        <input type="text" id="memory-event" placeholder="e.g., Our First Trip to Goa" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="memory-description">Description:</label>
+                        <textarea id="memory-description" rows="3" placeholder="Describe the moment..." required></textarea>
+                    </div>
+                    <button type="submit" style="width: 100%;">Add Memory to Timeline</button>
+                </form>
+                <hr style="margin: 2rem 0; border: 1px dashed var(--color-sepia-medium);">
+                <h3 style="text-align: left;">Timeline of Our Moments</h3>
+                <table class="memory-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Event</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memory-table-body">
+                        <!-- Memories will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
